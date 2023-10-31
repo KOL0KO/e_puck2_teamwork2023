@@ -39,7 +39,7 @@ int **Get_Image() {
 	return matrix;
 }
 
-// turn toward the most red object. 
+// turn toward the most red object.
 void Face_Object() {
 	int turnSpeed = 200;
 	int **image = Get_Image();
@@ -81,7 +81,7 @@ void Face_Object() {
 	}
 }
 
-// looks at the distance of an object and follow it at a distance. 
+// looks at the distance of an object and follow it at a distance.
 void Follow_Object() {
 	int driveSpeed = 500;
 	if (VL53L0X_get_dist_mm() >= 50 && VL53L0X_get_dist_mm() <= 100) {
@@ -105,7 +105,7 @@ void Turn_Puck(int sensor, int speed) {
 		right_motor_set_speed(75 * -1);
 		chThdSleepMilliseconds(500);
 		break;
-	
+
 	case 3:
 		left_motor_set_speed(speed);
 		right_motor_set_speed(speed * -1);
@@ -125,10 +125,10 @@ void Turn_Puck(int sensor, int speed) {
 		right_motor_set_speed(speed);
 		chThdSleepMilliseconds(500);
 		break;
-	default;
+//	default;
 //		left_motor_set_speed(speed);
 //		right_motor_set_speed(speed * -1);
-		break;
+//		break;
 	}
 }
 
@@ -138,7 +138,7 @@ int main(void) {
 	mpu_init();
 	/** Inits the Inter Process Communication bus. */
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
-	proximity_start();
+	proximity_start(0);
 	calibrate_ir();
 	motors_init();
 	serial_start();
@@ -195,6 +195,3 @@ void __stack_chk_fail(void)
 {
 	chSysHalt("Stack smashing detected");
 }
-
-
-
