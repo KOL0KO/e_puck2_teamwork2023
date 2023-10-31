@@ -1,0 +1,188 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include "ch.h"
+#include "hal.h"
+#include "memory_protection.h"
+#include <main.h>
+#include "shell.h"
+#include "epuck1x/a_d/advance_ad_scan/e_acc.h"
+#include "epuck1x/motor_led/advance_one_timer/e_led.h"
+#include "epuck1x/utility/utility.h"
+#include "sensors/ground.h"
+#include "sensors/imu.h"
+#include "sensors/mpu9250.h"
+#include "behaviors.h"
+#include "button.h"
+#include "cmd.h"
+#include "i2c_bus.h"
+#include "communication.h"
+#include "uc_usage.h"
+// led
+#include "leds.h"
+#include "spi_comm.h"
+// proximity
+#include "sensors/proximity.h"
+// distance
+#include "sensors/VL53L0X/VL53L0X.h"
+// bluetooth
+#include "epuck1x/uart/e_uart_char.h"
+#include "stdio.h"
+#include "serial_comm.h"
+// motor
+#include "motors.h"
+// usb
+#include "chprintf.h"
+#include "usbcfg.h"
+// battery percentage
+#include "sensors/battery_level.h"
+// selector 
+#include "selector.h"
+// audio
+#include "audio/audio_thread.h"
+#include "audio/play_melody.h"
+#include "audio/play_sound_file.h"
+// microphone
+#include "audio/microphone.h"
+// camera
+#include "camera/camera.h"
+
+// Proximity Sensor - inter process communication bus
+messagebus_t bus;
+MUTEX_DECL(bus_lock);
+CONDVAR_DECL(bus_condvar);
+
+
+
+
+
+int main(void)
+{
+halInit();
+chSysInit();
+mpu_init();
+// Your initialisations here
+
+// Proximity Sensor
+messagebus_init(&bus, &bus_lock, &bus_condvar);
+// Clear any LEDs, start SPI communication, initialize motors, and set up proximity sensors
+clear_leds(); // clears all led
+spi_comm_start(); // led
+motors_init(); // motor
+proximity_start(); // proximity
+calibrate_ir(); // proximity calibrate
+
+// uint16_t melody_state = 0, melody_counter = 0;
+ 
+
+
+// continue code below here...
+
+// Initialize variables for proximity sensor values and motor control
+int val_proximity[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+int sum_right;
+int sum_left;
+int times_left = 0;
+int times_right = 0;
+int i = 0;
+
+// Main control loop
+while (1) {
+    chThdSleepMilliseconds(50);
+
+    // Reset sums and clear LEDs
+    sum_right = 0;
+    sum_left = 0;
+    clear_leds();
+
+    // Read proximity sensor values
+    for (i = 0; i <= 7; i++) {
+        val_proximity[i] = get_calibrated_prox(i);
+    }
+
+    sum_right = val_proximity[0] + val_proximity[1]; // 0,1 are on right
+    sum_left = val_proximity[6] + val_proximity[7]; // 7,6 are on the left
+
+    // Check for a dead end and take appropriate action
+    if ((val_proximity[0] > 500 || val_proximity[7] > 500) && val_proximity[2] > 400 && val_proximity[5] > 400) {
+        left_motor_set_speed(-300); // Turn around
+        right_motor_set_speed(300);
+       /* e_set_led(0, 1);
+        e_set_led(7, 1);
+        e_set_led(2, 0);
+        e_set_led(5, 0); */
+        chThdSleepMilliseconds(2000);
+    }/* else {
+        e_set_led(0, 0);
+        e_set_led(7, 0);
+        e_set_led(2, 1);
+        e_set_led(5, 1);
+			} */
+
+    // Avoid running in circles
+    if (times_left >= 5 || times_right >= 5) {
+        times_left = 0;
+        times_right = 0;
+        left_motor_set_speed(-300); // Turn around
+        right_motor_set_speed(300);
+        chThdSleepMilliseconds(2000);
+    }
+
+    // Decide to run forward or turn based on proximity sensor readings
+    if (val_proximity[0] <= 500 && val_proximity[1] <= 500 && val_proximity[6] <= 500 && val_proximity[7] <= 500) {
+        // No obstacles in front, run forward
+        left_motor_set_speed(400);
+        right_motor_set_speed(400);
+    } else {
+        // Obstacle in front, make a decision to turn left or right
+        if (sum_right >= sum_left) {
+            // Turning left situation
+            // add left audio 
+            times_left++;
+            times_right = 0;
+            //void set_led(led_name_t led_number, unsigned int value);
+            /*set_led(LED1, 1);
+            set_led(LED2, 1);
+            set_led(LED8, 0) */    
+            left_motor_set_speed(-300);
+            right_motor_set_speed(300);
+            chThdSleepMilliseconds(50);
+            while (val_proximity[1] > 500) {
+                val_proximity[1] = get_calibrated_prox(1);
+                left_motor_set_speed(-200);
+                right_motor_set_speed(200);
+                chThdSleepMilliseconds(50);
+            }
+        } else {
+            // Turning right situation
+            times_right++;
+            times_left = 0;
+            //void set_led(led_name_t led_number, unsigned int value);
+            /*set_led(LED1, 1);
+            set_led(LED2, 0);
+            set_led(LED8, 1) */ 
+            left_motor_set_speed(300);
+            right_motor_set_speed(-300);
+            chThdSleepMilliseconds(50);
+            while (val_proximity[6] > 500) {
+                val_proximity[6] = get_calibrated_prox(6);
+                left_motor_set_speed(200);
+                right_motor_set_speed(-200);
+                chThdSleepMilliseconds(50);
+            }
+        }
+    }
+}
+
+}
+
+// Stack smashing protection and handling
+#define STACK_CHK_GUARD 0xe2dee396
+uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
+
+void __stack_chk_fail(void)
+{
+    chSysHalt("Stack smashing detected");
+}
+
