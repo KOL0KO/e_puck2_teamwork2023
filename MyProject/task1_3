@@ -137,8 +137,19 @@ while (1) {
     // Decide to run forward or turn based on proximity sensor readings
     if (val_proximity[0] <= 480 && val_proximity[1] <= 480 && val_proximity[6] <= 480 && val_proximity[7] <= 480) {
         // No obstacles in front, run forward
+
+	int average = (val_proximity[0] + val_proximity[1] + val_proximity[2] + val_proximity[5] + val_proximity[6] + val_proximity[7]) / 6;
+    if (average <= 200) {
         left_motor_set_speed(1000);
         right_motor_set_speed(1000);
+    } else if (average <= 350 && average > 200) {
+        left_motor_set_speed(500);
+        right_motor_set_speed(500);
+    } else {
+        left_motor_set_speed(400);
+        right_motor_set_speed(400);
+    }
+
     } else {
         // Obstacle in front, make a decision to turn left or right
         if (sum_right >= sum_left) {
