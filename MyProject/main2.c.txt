@@ -1,0 +1,114 @@
+﻿#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+
+#include "selector.h"
+#include "motors.h"
+#include "ch.h"
+#include "hal.h"
+#include "memory_protection.h"
+#include <main.h>
+#include "leds.h"
+#include "spi_comm.h"
+#include "epuck1x/uart/e_uart_char.h"
+//#include "stdio.h"
+#include "serial_comm.h"
+
+
+#include "sensors/proximity.h"
+#define PROXIMITY_THRESHOLD 100
+#define PROXIMITY_Corner_THRESHOLD 100
+#define MotorSPEED 300
+
+
+messagebus_t bus;
+MUTEX_DECL(bus_lock);
+CONDVAR_DECL(bus_condvar);
+
+
+int main()
+{
+    halInit();
+    chSysInit();
+    mpu_init();
+
+
+    messagebus_init(&bus, &bus_lock, &bus_condvar);
+
+
+    proximity_start(0);
+    calibrate_ir();
+    motors_init();
+
+
+    serial_start();
+
+
+    set_led(LED1,5);
+    set_led(LED3,8);
+        set_led(LED5,9);
+        set_led(LED7,1);
+        set_rgb_led(LED2, 8, 3, 5);
+        set_rgb_led(LED4, 1, 3, 6);
+        set_rgb_led(LED6, 1, 3, 5);
+        set_rgb_led(LED8, 1, 3, 7);
+
+
+
+
+
+
+        set_body_led(2);
+        set_front_led(1);
+
+
+
+
+    while (1) {
+        int left_prox = get_calibrated_prox(0); // adjust sensor number as needed
+        int right_prox = get_calibrated_prox(7); // adjust sensor number as needed
+        int leftcorner_prox = get_calibrated_prox(1); // adjust sensor number as needed
+        int rightcorner_prox = get_calibrated_prox(6); // adjust sensor number as needed
+         if(get_selector() == 2){
+
+
+            if (left_prox > PROXIMITY_THRESHOLD || leftcorner_prox > PROXIMITY_Corner_THRESHOLD) {
+                // Object is closer to the left side, turn clockwise
+                left_motor_set_speed(-MotorSPEED);
+                right_motor_set_speed(MotorSPEED);
+
+
+            } else if (right_prox > PROXIMITY_THRESHOLD || rightcorner_prox > PROXIMITY_Corner_THRESHOLD) {
+            // Object is closer to the right side, turn anticlockwise
+            left_motor_set_speed(MotorSPEED);
+            right_motor_set_speed(-MotorSPEED);
+
+
+            }else {
+            // Move forward
+            left_motor_set_speed(MotorSPEED);
+            right_motor_set_speed(MotorSPEED);
+            }
+
+
+            chThdSleepMilliseconds(100); // adjust delay as needed
+
+
+        }  else {
+                left_motor_set_speed(0);
+                right_motor_set_speed(0);
+        }
+    }
+}
+
+
+#define STACK_CHK_GUARD 0xe2dee396
+uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
+
+
+void __stack_chk_fail(void)
+{
+    chSysHalt("Stack smashing detected");
+}
